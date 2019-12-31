@@ -1,4 +1,5 @@
 import copy
+import math
 
 import torch
 import torch.nn as nn
@@ -131,13 +132,50 @@ class Bert(nn.Module):
                 top_vec, _ = self.model(x, segs, attention_mask=mask)
         return top_vec
 
+class PositionalEmbedding(nn.Module):
+    def __init__(self, dropout, dim, max_len=5000):
+        pe = torch.zeros(max_len, dim)
+        position = torch.arange(0, max_len).unsqueeze(1)
+        div_term = torch.exp((torch.arange(0, dim, 2, dtype=torch.float) *
+                              -(math.log(10000.0) / dim)))
+        pe[:, 0::2] = torch.sin(position.float() * div_term)
+        pe[:, 1::2] = torch.cos(position.float() * div_term)
+        pe = pe.unsqueeze(0)
+        super(PositionalEmbedding, self).__init__()
+        self.register_buffer('pe', pe)
+
+    def forward(self, emb):
+        return self.pe[:, :emb.size(1)]
+
+class Transformer(nn.Module):
+    def __init__(self, bert_config, finetune=False):
+        super(Transformer, self).__init__()
+        self.model = BertModel(bert_config)
+        self.finetune = finetune
+
+    def forward(self, x, segs, mask):
+        if(self.finetune):
+            top_vec, _ = self.model(x, segs, attention_mask=mask)
+        else:
+            self.eval()
+            with torch.no_grad():
+                top_vec, _ = self.model(x, segs, attention_mask=mask)
+        return top_vec
 
 class ExtSummarizer(nn.Module):
     def __init__(self, args, device, checkpoint):
         super(ExtSummarizer, self).__init__()
         self.args = args
         self.device = device
-        self.bert = Bert(args.large, args.temp_dir, args.finetune_bert)
+        # self.bert = Bert(args.large, args.temp_dir, args.finetune_bert)
+        bert_config = BertConfig(vocab_size=30522, hidden_size=args.enc_hidden_size,
+                                     num_hidden_layers=args.enc_layers, num_attention_heads=8,
+                                     intermediate_size=args.enc_ff_size,
+                                     hidden_dropout_prob=args.enc_dropout,
+                                     attention_probs_dropout_prob=args.enc_dropout)
+        self.bert = Transformer(bert_config, args.finetune_bert)
+        my_pos_emb = PositionalEmbedding(args.enc_dropout, args.enc_hidden_size)
+        self.bert.model.embeddings.position_embeddings = my_pos_emb
 
         self.ext_layer = ExtTransformerEncoder(self.bert.model.config.hidden_size, args.ext_ff_size, args.ext_heads,
                                                args.ext_dropout, args.ext_layers)
@@ -180,7 +218,15 @@ class AbsSummarizer(nn.Module):
         super(AbsSummarizer, self).__init__()
         self.args = args
         self.device = device
-        self.bert = Bert(args.large, args.temp_dir, args.finetune_bert)
+        # self.bert = Bert(args.large, args.temp_dir, args.finetune_bert)
+        bert_config = BertConfig(vocab_size=30522, hidden_size=args.enc_hidden_size,
+                                     num_hidden_layers=args.enc_layers, num_attention_heads=8,
+                                     intermediate_size=args.enc_ff_size,
+                                     hidden_dropout_prob=args.enc_dropout,
+                                     attention_probs_dropout_prob=args.enc_dropout)
+        self.bert = Transformer(bert_config, args.finetune_bert)
+        my_pos_emb = PositionalEmbedding(args.enc_dropout, args.enc_hidden_size)
+        self.bert.model.embeddings.position_embeddings = my_pos_emb
 
         if bert_from_extractive is not None:
             self.bert.model.load_state_dict(
