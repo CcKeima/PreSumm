@@ -1,11 +1,13 @@
-python train.py -task ext -mode train \
+python train.py -mode train -task abs \
 -bert_data_path /home/ybai/downloads/bert_data_cnndm_final/cnndm \
--model_path ../models_ext_baseline \
--log_file ../logs/ext_cnndm_baseline \
--ext_dropout 0.1 -lr 0.05 \
--batch_size 2000 -train_steps 50000 -warmup_steps 8000 -report_every 50 \
--save_checkpoint_steps 2000 \
--accum_count 2 \
--use_interval true -max_pos 512 \
+-model_path ../models_abs_baseline \
+-log_file ../logs/cnndm_baseline \
+-accum_count 5  \
+-sep_optim false -lr 0.05 -dec_dropout 0.1 \
+-batch_size 300 -train_steps 200000 -warmup_steps 8000 -report_every 50 \
+-save_checkpoint_steps 2000 -seed 777 \
+-use_bert_emb true -use_interval true \
+-max_pos 512 -enc_hidden_size 512  -enc_layers 6 -enc_ff_size 2048 -enc_dropout 0.1 \
+-dec_layers 6 -dec_hidden_size 512 -dec_ff_size 2048 \
 -encoder baseline \
--visible_gpus 4 \
+-visible_gpus 4
